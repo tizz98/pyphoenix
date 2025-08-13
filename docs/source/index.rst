@@ -4,6 +4,11 @@ PyPhoenix Documentation
 PyPhoenix is a Python implementation of the Phoenix Framework's real-time communication patterns.
 It provides channels, presence tracking, PubSub messaging, and WebSocket transport with a familiar Phoenix-style API.
 
+.. note::
+   **✅ Ready to Use**: PyPhoenix has completed Phase 2 development! The examples below are fully functional. 
+   Phoenix app integration, client-server communication, and core features are working. 
+   See our `GitHub repository <https://github.com/tizz98/pyphoenix>`_ for detailed implementation status.
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:

@@ -315,9 +315,103 @@ class Channel:
             event: The event name
             payload: The message payload
         """
-        # For now, this is the same as push since we don't have
-        # multiple participants yet
-        await self.push(event, payload)
+        from .pubsub import get_pubsub
+
+        pubsub = get_pubsub()
+        broadcast_data = {"event": event, "payload": payload}
+        await pubsub.publish(self.topic, broadcast_data)
+
+    async def broadcast_from(self, socket, event: str, payload: dict[str, Any]) -> None:
+        """
+        Broadcast a message to all channel participants except the specified socket.
+
+        Args:
+            socket: The socket to exclude from the broadcast
+            event: The event name
+            payload: The message payload
+        """
+        from .pubsub import get_pubsub
+
+        pubsub = get_pubsub()
+        broadcast_data = {
+            "event": event,
+            "payload": payload,
+            "exclude_socket": socket.id if socket else None,
+        }
+        await pubsub.publish(self.topic, broadcast_data)
+
+    async def track_presence(self, user_id: str, meta: dict[str, Any]) -> None:
+        """
+        Track a user's presence in this channel.
+
+        Args:
+            user_id: The user identifier
+            meta: Metadata about the presence (username, socket_id, etc.)
+        """
+        from .presence import get_presence
+
+        presence = get_presence()
+        # Add user_id to meta for the presence system
+        presence_meta = {
+            "user_id": user_id,
+            "metadata": meta,
+            **meta,  # Also include meta fields at top level for backwards compatibility
+        }
+        await presence.track(user_id, self.topic, presence_meta)
+
+        logger.debug("channel.presence_tracked", topic=self.topic, user_id=user_id, meta=meta)
+
+    async def untrack_presence(self, user_id: str) -> None:
+        """
+        Stop tracking a user's presence in this channel.
+
+        Args:
+            user_id: The user identifier
+        """
+        from .presence import get_presence
+
+        presence = get_presence()
+        await presence.untrack(user_id, self.topic)
+
+        logger.debug("channel.presence_untracked", topic=self.topic, user_id=user_id)
+
+    async def list_presence(self) -> dict[str, Any]:
+        """
+        List all users currently present in this channel.
+
+        Returns:
+            Dictionary mapping user IDs to their presence metadata
+        """
+        from .presence import get_presence
+
+        presence = get_presence()
+        presence_states = await presence.list(self.topic)
+
+        # Convert to simpler format for user consumption
+        result = {}
+        for user_id, state in presence_states.items():
+            if state.metas:
+                # Use the most recent meta
+                latest_meta = state.metas[-1]
+                result[user_id] = {
+                    "online_at": latest_meta.online_at,
+                    "user_id": latest_meta.user_id,
+                    "metadata": latest_meta.metadata or {},
+                }
+
+        return result
+
+    async def presence_count(self) -> int:
+        """
+        Get the number of users present in this channel.
+
+        Returns:
+            Number of present users
+        """
+        from .presence import get_presence
+
+        presence = get_presence()
+        return await presence.presence_count_for_topic(self.topic)
 
     def on(self, event: str, callback: Callable | None = None):
         """
@@ -393,6 +487,147 @@ class Channel:
                 logger.error(
                     "channel.callback_error", topic=self.topic, event_name=event, error=str(e)
                 )
+
+    async def handle_event(
+        self, event: str, payload: dict[str, Any], ref: str | None, socket
+    ) -> None:
+        """
+        Handle incoming event from Phoenix routing system.
+
+        This is the main entry point for events routed from Phoenix app.
+        Dispatches to appropriate handler methods (on_join, on_message, etc.)
+
+        Args:
+            event: The event name (phx_join, message, etc.)
+            payload: The event payload
+            ref: Message reference for replies
+            socket: The socket that sent the message
+        """
+        logger.debug(
+            "channel.handling_event",
+            topic=self.topic,
+            event_name=event,
+            socket_id=socket.id if socket else None,
+        )
+
+        if event == "phx_join":
+            await self._handle_join_event(payload, ref, socket)
+        elif event == "phx_leave":
+            await self._handle_leave_event(payload, ref, socket)
+        else:
+            # Look for on_{event} method
+            method_name = f"on_{event}"
+            if hasattr(self, method_name):
+                method = getattr(self, method_name)
+                if callable(method):
+                    try:
+                        await method(payload, socket)
+                        # For non-join events, we don't automatically send a reply
+                        # The handler method can call self.push() if needed
+                    except Exception as e:
+                        logger.error(
+                            "channel.event_handler_error",
+                            topic=self.topic,
+                            event_name=event,
+                            error=str(e),
+                        )
+                        await self._send_error_reply(ref, socket, str(e))
+            else:
+                logger.warning("channel.unknown_event", topic=self.topic, event_name=event)
+                await self._send_error_reply(ref, socket, f"Unknown event: {event}")
+
+    async def _handle_join_event(self, payload: dict[str, Any], ref: str | None, socket) -> None:
+        """Handle phx_join event"""
+        try:
+            # Call on_join if it exists
+            if hasattr(self, "on_join") and callable(self.on_join):
+                result = await self.on_join(payload, socket)
+            else:
+                result = {"status": "ok", "response": {}}
+
+            # Send reply
+            reply = Message(
+                topic=self.topic, event="phx_reply", payload=result, ref=ref, join_ref=ref
+            )
+            await socket.push(reply)
+
+            if result.get("status") == "ok":
+                self.state = ChannelState.JOINED
+                self.join_ref = ref
+                logger.info("channel.join_success", topic=self.topic, socket_id=socket.id)
+            else:
+                logger.warning(
+                    "channel.join_rejected",
+                    topic=self.topic,
+                    socket_id=socket.id,
+                    reason=result.get("response", {}).get("reason"),
+                )
+
+        except Exception as e:
+            logger.error("channel.join_error", topic=self.topic, error=str(e))
+            await self._send_error_reply(ref, socket, str(e))
+
+    async def _handle_leave_event(self, payload: dict[str, Any], ref: str | None, socket) -> None:
+        """Handle phx_leave event"""
+        # Check if already in leaving state to prevent duplicate operations
+        if self.state == ChannelState.LEAVING:
+            logger.debug(
+                "channel.leave_ignored_already_leaving", topic=self.topic, socket_id=socket.id
+            )
+            return
+
+        try:
+            # Set state early to prevent race conditions
+            self.state = ChannelState.LEAVING
+
+            # Call on_leave if it exists
+            if hasattr(self, "on_leave") and callable(self.on_leave):
+                await self.on_leave("manual", socket)
+
+            # Send leave reply only if socket is not closed
+            if not socket.closed:
+                reply = Message(
+                    topic=self.topic,
+                    event="phx_reply",
+                    payload={"status": "ok", "response": {}},
+                    ref=ref,
+                    join_ref=self.join_ref,
+                )
+                await socket.push(reply)
+
+            self.state = ChannelState.CLOSED
+            logger.info("channel.leave_success", topic=self.topic, socket_id=socket.id)
+
+        except Exception as e:
+            logger.error("channel.leave_error", topic=self.topic, error=str(e))
+            if not socket.closed:
+                await self._send_error_reply(ref, socket, str(e))
+
+    async def _send_error_reply(self, ref: str | None, socket, reason: str):
+        """Send error reply to client"""
+        reply = Message(
+            topic=self.topic,
+            event="phx_reply",
+            payload={"status": "error", "response": {"reason": reason}},
+            ref=ref,
+            join_ref=self.join_ref,
+        )
+        await socket.push(reply)
+
+    async def _cleanup_without_socket(self) -> None:
+        """Clean up channel without sending socket messages."""
+        self.state = ChannelState.CLOSED
+
+        # Cancel rejoin timer if active
+        if self.rejoin_timer:
+            self.rejoin_timer.cancel()
+            self.rejoin_timer = None
+
+        # Clear any pending join future
+        if self.join_push and not self.join_push.done():
+            self.join_push.cancel()
+
+        logger.info("channel.cleanup_completed", topic=self.topic)
 
     def _make_ref(self) -> str:
         """Generate a unique reference string."""

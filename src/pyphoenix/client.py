@@ -225,7 +225,8 @@ class ClientChannel:
         """Handle reply messages."""
         if ref == self.join_ref and self.join_future and not self.join_future.done():
             if payload.get("status") == "ok":
-                self.join_future.set_result(payload.get("response", {}))
+                # Return the full payload so client can access both status and response
+                self.join_future.set_result(payload)
             else:
                 error = payload.get("response", {}).get("reason", "Unknown error")
                 self.join_future.set_exception(Exception(f"Join failed: {error}"))

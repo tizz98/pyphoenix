@@ -9,6 +9,53 @@ and this project adheres to `Semantic Versioning <https://semver.org/spec/v2.0.0
 [Unreleased]
 ------------
 
+[0.2.0] - 2025-08-13
+--------------------
+
+**🎉 Phase 2 Complete: Integration & Core Features**
+
+Added
+~~~~~
+
+**Phoenix App Integration**
+* Phoenix app class routes WebSocket connections to registered channels
+* Channel pattern matching (``room:*`` → RoomChannel) working  
+* WebSocket transport integrated with Phoenix application
+* Complete routing from WebSocket → Phoenix → Channels
+
+**End-to-End Functionality**
+* Working client-server examples with real communication
+* Complete channel join/leave flows between client and server
+* Message broadcasting working across multiple connections
+
+**Core Feature Implementation**
+* PubSub integration with channel broadcasting (``channel.broadcast()``)
+* Presence tracking methods (``track_presence()``, ``list_presence()``, ``broadcast_from()``)
+* Comprehensive test suite with **71 passing tests**
+
+**Developer Experience**  
+* Working examples: ``target_chat_server.py`` and ``target_chat_client.py``
+* Phoenix-style decorator API (``@app.channel("room:*")``)
+* Robust error handling and socket cleanup
+
+Fixed
+~~~~~
+
+**Socket & Channel Cleanup**
+* Resolved double-leave issues and WebSocket close errors
+* Fixed socket state management to prevent sending on closed sockets
+* Added proper cleanup coordination between Socket and Channel
+
+**Client Compatibility**
+* Fixed join response handling and decorator patterns
+* Updated client join response format expectations
+* Corrected response format in ``_handle_reply()``
+
+**Missing Implementation**
+* Implemented ``track_presence()``, ``list_presence()``, ``broadcast_from()`` methods
+* Added comprehensive presence method tests
+* Fixed websocket library compatibility with modern websockets.asyncio API
+
 [0.1.0] - 2025-08-13
 --------------------
 

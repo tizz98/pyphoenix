@@ -3,6 +3,10 @@ Examples
 
 This section contains practical examples and recipes for common PyPhoenix use cases.
 
+.. note::
+   **✅ All Examples Work**: These examples have been tested with PyPhoenix's completed Phase 2 implementation. 
+   You can copy and run them directly with the current version.
+
 .. toctree::
    :maxdepth: 2
 

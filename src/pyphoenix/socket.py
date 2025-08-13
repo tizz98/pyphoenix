@@ -22,12 +22,13 @@ class Socket:
     Handles WebSocket communication, channel management, and message routing.
     """
 
-    def __init__(self, websocket: ServerConnection | None = None):
+    def __init__(self, websocket: ServerConnection | None = None, phoenix_app=None):
         """
         Initialize a socket connection.
 
         Args:
             websocket: The WebSocket connection (None for testing)
+            phoenix_app: Phoenix application instance for routing
         """
         self.id = uuid.uuid4().hex
         self.websocket = websocket
@@ -36,6 +37,7 @@ class Socket:
         self.transport = "websocket" if websocket else "test"
         self.pubsub = get_pubsub()
         self.closed = False
+        self.phoenix_app = phoenix_app
 
         logger.info("socket.connected", socket_id=self.id, transport=self.transport)
 
@@ -47,22 +49,32 @@ class Socket:
             message: The message to send
         """
         if self.closed:
-            raise RuntimeError("Socket is closed")
+            logger.debug("socket.push_ignored_closed", socket_id=self.id, topic=message.topic)
+            return  # Silently ignore instead of raising error
 
         message_data = message.to_list()
 
         if self.websocket:
             try:
-                await self.websocket.send(json.dumps(message_data))
-                logger.debug(
-                    "socket.message_sent",
-                    socket_id=self.id,
-                    topic=message.topic,
-                    event_name=message.event,
-                )
+                # Check if websocket is still open before sending
+                if self.websocket.state.name in ["OPEN", "CONNECTING"]:
+                    await self.websocket.send(json.dumps(message_data))
+                    logger.debug(
+                        "socket.message_sent",
+                        socket_id=self.id,
+                        topic=message.topic,
+                        event_name=message.event,
+                    )
+                else:
+                    logger.debug(
+                        "socket.push_ignored_websocket_closed",
+                        socket_id=self.id,
+                        topic=message.topic,
+                    )
+                    await self._mark_closed()
             except Exception as e:
                 logger.error("socket.send_error", socket_id=self.id, error=str(e))
-                await self.close()
+                await self._mark_closed()
         else:
             # For testing without WebSocket - just trigger local handling
             await self._handle_message(message_data)
@@ -94,7 +106,15 @@ class Socket:
         """
         try:
             message_data = json.loads(raw_message)
-            await self._handle_message(message_data)
+            message = Message.from_list(message_data)
+
+            # Route through Phoenix app if available
+            if self.phoenix_app:
+                await self.phoenix_app.route_message(self, message)
+            else:
+                # Fallback to old behavior for testing
+                await self._handle_message(message_data)
+
         except json.JSONDecodeError as e:
             logger.error("socket.invalid_json", socket_id=self.id, error=str(e))
         except Exception as e:
@@ -231,6 +251,10 @@ class Socket:
         except Exception as e:
             logger.error("socket.forward_error", socket_id=self.id, topic=topic, error=str(e))
 
+    async def _mark_closed(self) -> None:
+        """Mark socket as closed without triggering full cleanup."""
+        self.closed = True
+
     async def close(self) -> None:
         """Close the socket connection."""
         if self.closed:
@@ -238,10 +262,15 @@ class Socket:
 
         self.closed = True
 
-        # Close all channels
+        # Close all channels gracefully
         for channel in list(self.channels.values()):
             try:
-                await channel.leave()
+                # Call channel's leave method but don't trigger socket operations
+                if hasattr(channel, "_cleanup_without_socket"):
+                    await channel._cleanup_without_socket()
+                else:
+                    # Fallback: set channel to closed state without socket operations
+                    channel.state = ChannelState.CLOSED
             except Exception as e:
                 logger.error(
                     "socket.channel_close_error",
@@ -255,9 +284,11 @@ class Socket:
         # Close WebSocket if present
         if self.websocket:
             try:
-                await self.websocket.close()
+                # Only close if not already closed/closing
+                if self.websocket.state.name not in ["CLOSED", "CLOSING"]:
+                    await self.websocket.close()
             except Exception as e:
-                logger.error("socket.websocket_close_error", socket_id=self.id, error=str(e))
+                logger.debug("socket.websocket_close_error", socket_id=self.id, error=str(e))
 
         logger.info("socket.closed", socket_id=self.id)
 
@@ -285,8 +316,19 @@ class WebSocketTransport:
         self.port = port
         self.sockets: set[Socket] = set()
         self.server = None
+        self.phoenix_app = None  # Reference to Phoenix application
 
         logger.info("websocket_transport.initialized", host=host, port=port)
+
+    def set_phoenix_app(self, app):
+        """
+        Connect this transport to a Phoenix application.
+
+        Args:
+            app: Phoenix application instance
+        """
+        self.phoenix_app = app
+        logger.info("websocket_transport.phoenix_connected", app_class=type(app).__name__)
 
     async def start(self) -> None:
         """Start the WebSocket server."""
@@ -312,14 +354,24 @@ class WebSocketTransport:
         Args:
             websocket: The WebSocket connection
         """
-        socket = Socket(websocket)
+        socket = Socket(websocket, phoenix_app=self.phoenix_app)
         self.sockets.add(socket)
 
         try:
             async for message in websocket:
-                await socket.handle_websocket_message(message)
+                if not socket.closed:
+                    await socket.handle_websocket_message(message)
         except Exception as e:
-            logger.error("websocket_transport.connection_error", socket_id=socket.id, error=str(e))
+            # Don't log as error for normal close codes
+            if "1000" in str(e) or "OK" in str(e):
+                logger.debug(
+                    "websocket_transport.connection_closed", socket_id=socket.id, error=str(e)
+                )
+            else:
+                logger.error(
+                    "websocket_transport.connection_error", socket_id=socket.id, error=str(e)
+                )
         finally:
-            await socket.close()
+            # Ensure socket is marked as closed before cleanup
+            await socket._mark_closed()
             self.sockets.discard(socket)

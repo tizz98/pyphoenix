@@ -1,6 +1,6 @@
 [project]
 name = "pyphoenix"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python implementation of Phoenix Framework's real-time communication patterns"
 authors = [
     {name = "Elijah Wilson",email = "dev.tizz98@gmail.com"}
