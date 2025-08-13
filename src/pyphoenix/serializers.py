@@ -47,14 +47,14 @@ class JSONSerializer(Serializer):
         try:
             return json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         except (TypeError, ValueError) as e:
-            raise SerializationError(f"Failed to serialize to JSON: {e}")
+            raise SerializationError(f"Failed to serialize to JSON: {e}") from e
 
     def deserialize(self, data: bytes) -> Any:
         """Deserialize JSON bytes to data."""
         try:
             return json.loads(data.decode("utf-8"))
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
-            raise SerializationError(f"Failed to deserialize JSON: {e}")
+            raise SerializationError(f"Failed to deserialize JSON: {e}") from e
 
     @property
     def content_type(self) -> str:
@@ -69,14 +69,14 @@ class PickleSerializer(Serializer):
         try:
             return pickle.dumps(data, protocol=pickle.HIGHEST_PROTOCOL)
         except (pickle.PicklingError, TypeError) as e:
-            raise SerializationError(f"Failed to serialize with pickle: {e}")
+            raise SerializationError(f"Failed to serialize with pickle: {e}") from e
 
     def deserialize(self, data: bytes) -> Any:
         """Deserialize pickle bytes to data."""
         try:
             return pickle.loads(data)
         except (pickle.UnpicklingError, TypeError) as e:
-            raise SerializationError(f"Failed to deserialize pickle: {e}")
+            raise SerializationError(f"Failed to deserialize pickle: {e}") from e
 
     @property
     def content_type(self) -> str:
@@ -95,7 +95,7 @@ class MessagePackSerializer(Serializer):
         try:
             return msgpack.packb(data, use_bin_type=True)
         except (msgpack.exceptions.PackException, TypeError) as e:
-            raise SerializationError(f"Failed to serialize with MessagePack: {e}")
+            raise SerializationError(f"Failed to serialize with MessagePack: {e}") from e
 
     def deserialize(self, data: bytes) -> Any:
         """Deserialize MessagePack bytes to data."""
@@ -106,7 +106,7 @@ class MessagePackSerializer(Serializer):
             msgpack.exceptions.ExtraData,
             ValueError,
         ) as e:
-            raise SerializationError(f"Failed to deserialize MessagePack: {e}")
+            raise SerializationError(f"Failed to deserialize MessagePack: {e}") from e
 
     @property
     def content_type(self) -> str:

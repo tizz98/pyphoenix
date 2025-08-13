@@ -59,14 +59,14 @@ class Channel:
     The channel lifecycle follows Phoenix conventions:
         1. CLOSED -> JOINING (when join() is called)
         2. JOINING -> JOINED (when join succeeds)
-        3. JOINED -> LEAVING (when leave() is called) 
+        3. JOINED -> LEAVING (when leave() is called)
         4. LEAVING -> CLOSED (when leave completes)
         5. Any state -> ERRORED (when errors occur)
 
     Attributes:
         topic (str): The channel topic (e.g., "room:lobby", "user:123")
         params (dict): Parameters passed during channel creation
-        socket: Associated socket connection 
+        socket: Associated socket connection
         state (ChannelState): Current channel state
         join_ref (str, optional): Reference ID for the join operation
         timeout (float): Timeout for operations in seconds (default: 10.0)
@@ -170,7 +170,7 @@ class Channel:
                 response = await channel.join({"user_id": "123"})
                 if response.status == "ok":
                     print("Successfully joined channel!")
-                    
+
             Join with authentication::
 
                 response = await channel.join({
@@ -235,18 +235,18 @@ class Channel:
                     logger.info("channel.joined", topic=self.topic, join_ref=self.join_ref)
                     return JoinResponse("ok", response)
 
-                except TimeoutError:
+                except TimeoutError as e:
                     self.state = ChannelState.ERRORED
                     error_msg = f"Join timeout after {self.timeout}s"
                     logger.error("channel.join_timeout", topic=self.topic, join_ref=self.join_ref)
-                    raise PyPhoenixTimeoutError(error_msg)
+                    raise PyPhoenixTimeoutError(error_msg) from e
 
         except PyPhoenixTimeoutError:
             raise
         except Exception as e:
             self.state = ChannelState.ERRORED
             logger.error("channel.join_error", topic=self.topic, error=str(e))
-            raise JoinError(f"Failed to join channel: {e}", self.topic)
+            raise JoinError(f"Failed to join channel: {e}", self.topic) from e
 
     async def _default_join_handler(self, payload: dict[str, Any], socket: Any) -> dict[str, Any]:
         """Default join handler when no custom handler is provided."""
@@ -277,7 +277,7 @@ class Channel:
             await self._push("phx_leave", {})
         except Exception as e:
             logger.error("channel.leave_error", topic=self.topic, error=str(e))
-            raise ChannelError(f"Failed to leave channel: {e}", self.topic)
+            raise ChannelError(f"Failed to leave channel: {e}", self.topic) from e
         finally:
             self.state = ChannelState.CLOSED
             logger.info("channel.left", topic=self.topic)

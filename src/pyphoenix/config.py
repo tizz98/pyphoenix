@@ -129,9 +129,11 @@ class PhoenixConfig:
         config.security.require_authentication = os.getenv(
             "PYPHOENIX_REQUIRE_AUTH", ""
         ).lower() in ("true", "1", "yes")
-        config.security.rate_limit_enabled = os.getenv(
-            "PYPHOENIX_RATE_LIMIT", "true"
-        ).lower() in ("true", "1", "yes")
+        config.security.rate_limit_enabled = os.getenv("PYPHOENIX_RATE_LIMIT", "true").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
         config.security.max_messages_per_second = int(
             os.getenv(
                 "PYPHOENIX_RATE_LIMIT_MPS",

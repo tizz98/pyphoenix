@@ -238,7 +238,9 @@ class PhoenixMetrics:
         channel_joins = await self.registry.counter(
             "pyphoenix_channel_joins_total", "Total number of channel joins"
         )
-        await channel_joins.inc(labels={"topic_pattern": self._topic_pattern(topic), "success": str(success)})
+        await channel_joins.inc(
+            labels={"topic_pattern": self._topic_pattern(topic), "success": str(success)}
+        )
 
         if success:
             active_channels = await self.registry.gauge(
@@ -258,14 +260,18 @@ class PhoenixMetrics:
         messages_sent = await self.registry.counter(
             "pyphoenix_messages_sent_total", "Total number of messages sent"
         )
-        await messages_sent.inc(labels={"topic_pattern": self._topic_pattern(topic), "event": event})
+        await messages_sent.inc(
+            labels={"topic_pattern": self._topic_pattern(topic), "event": event}
+        )
 
     async def record_message_received(self, topic: str, event: str) -> None:
         """Record a message received."""
         messages_received = await self.registry.counter(
             "pyphoenix_messages_received_total", "Total number of messages received"
         )
-        await messages_received.inc(labels={"topic_pattern": self._topic_pattern(topic), "event": event})
+        await messages_received.inc(
+            labels={"topic_pattern": self._topic_pattern(topic), "event": event}
+        )
 
     async def record_message_processing_time(self, topic: str, event: str, duration: float) -> None:
         """Record message processing time."""
@@ -306,7 +312,9 @@ class PhoenixMetrics:
         pubsub_subscribers = await self.registry.histogram(
             "pyphoenix_pubsub_subscribers", "Number of subscribers per publish"
         )
-        await pubsub_subscribers.observe(subscribers, labels={"topic_pattern": self._topic_pattern(topic)})
+        await pubsub_subscribers.observe(
+            subscribers, labels={"topic_pattern": self._topic_pattern(topic)}
+        )
 
     async def record_error(self, error_type: str, component: str) -> None:
         """Record an error."""
