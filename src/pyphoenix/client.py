@@ -8,8 +8,7 @@ from enum import Enum
 from typing import Any
 
 import structlog
-import websockets
-from websockets.client import WebSocketClientProtocol
+from websockets.asyncio.client import ClientConnection, connect
 
 from .exceptions import ConnectionError
 from .exceptions import TimeoutError as PyPhoenixTimeoutError
@@ -147,19 +146,38 @@ class ClientChannel:
         )
 
         await self.socket.push(message)
-        logger.debug("client_channel.pushed", topic=self.topic, event=event)
+        logger.debug("client_channel.pushed", topic=self.topic, event_name=event)
 
-    def on(self, event: str, callback: Callable) -> None:
+    def on(self, event: str, callback: Callable | None = None):
         """
         Register an event handler.
 
+        Can be used as a decorator:
+            @channel.on("event_name")
+            def handler(payload, ref):
+                pass
+
+        Or as a regular method:
+            channel.on("event_name", handler)
+
         Args:
             event: The event name
-            callback: The callback function
+            callback: The callback function (optional for decorator usage)
         """
-        if event not in self.bindings:
-            self.bindings[event] = []
-        self.bindings[event].append(callback)
+
+        def decorator(func: Callable) -> Callable:
+            if event not in self.bindings:
+                self.bindings[event] = []
+            self.bindings[event].append(func)
+            return func
+
+        if callback is None:
+            # Used as decorator: @channel.on("event")
+            return decorator
+        else:
+            # Used as method: channel.on("event", callback)
+            decorator(callback)
+            return callback
 
     def off(self, event: str, callback: Callable | None = None) -> None:
         """
@@ -199,7 +217,7 @@ class ClientChannel:
                 logger.error(
                     "client_channel.callback_error",
                     topic=self.topic,
-                    event=event,
+                    event_name=event,
                     error=str(e),
                 )
 
@@ -227,7 +245,7 @@ class ClientSocket:
         self.url = url
         self.params = params or {}
         self.state = ConnectionState.DISCONNECTED
-        self.websocket: WebSocketClientProtocol | None = None
+        self.websocket: ClientConnection | None = None
         self.channels: dict[str, ClientChannel] = {}
         self.ref_counter = 0
         self.heartbeat_interval = 30.0
@@ -268,7 +286,7 @@ class ClientSocket:
         try:
             # Connect WebSocket
             self.websocket = await asyncio.wait_for(
-                websockets.connect(self.url, additional_headers=self._build_headers()),
+                connect(self.url, additional_headers=self._build_headers()),
                 timeout=timeout,
             )
 
@@ -322,7 +340,7 @@ class ClientSocket:
                 logger.error("client_socket.channel_leave_error", topic=channel.topic, error=str(e))
 
         # Close WebSocket
-        if self.websocket and not self.websocket.closed:
+        if self.websocket:
             try:
                 await self.websocket.close()
             except Exception as e:
@@ -370,7 +388,7 @@ class ClientSocket:
 
         message_data = json.dumps(message.to_list())
         await self.websocket.send(message_data)
-        logger.debug("client_socket.message_sent", topic=message.topic, event=message.event)
+        logger.debug("client_socket.message_sent", topic=message.topic, event_name=message.event)
 
     def on_connect(self, handler: Callable) -> None:
         """Register a connect event handler."""
@@ -400,7 +418,7 @@ class ClientSocket:
                     logger.debug(
                         "client_socket.message_received",
                         topic=message.topic,
-                        event=message.event,
+                        event_name=message.event,
                     )
 
                     # Route message to appropriate channel
@@ -417,12 +435,13 @@ class ClientSocket:
                 except Exception as e:
                     logger.error("client_socket.message_processing_error", error=str(e))
 
-        except websockets.exceptions.ConnectionClosed:
-            logger.info("client_socket.connection_closed")
-            await self._handle_disconnect()
         except Exception as e:
-            logger.error("client_socket.receive_loop_error", error=str(e))
-            await self._handle_error(e)
+            if "Connection closed" in str(e) or "ConnectionClosed" in str(type(e).__name__):
+                logger.info("client_socket.connection_closed")
+                await self._handle_disconnect()
+            else:
+                logger.error("client_socket.receive_loop_error", error=str(e))
+                await self._handle_error(e)
 
     async def _heartbeat_loop(self) -> None:
         """Send periodic heartbeat messages."""

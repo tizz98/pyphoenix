@@ -6,8 +6,7 @@ import uuid
 from typing import Any
 
 import structlog
-import websockets
-from websockets.server import WebSocketServerProtocol
+from websockets.asyncio.server import ServerConnection, serve
 
 from .channel import Channel
 from .pubsub import get_pubsub
@@ -23,7 +22,7 @@ class Socket:
     Handles WebSocket communication, channel management, and message routing.
     """
 
-    def __init__(self, websocket: WebSocketServerProtocol | None = None):
+    def __init__(self, websocket: ServerConnection | None = None):
         """
         Initialize a socket connection.
 
@@ -254,7 +253,7 @@ class Socket:
         self.channels.clear()
 
         # Close WebSocket if present
-        if self.websocket and not self.websocket.closed:
+        if self.websocket:
             try:
                 await self.websocket.close()
             except Exception as e:
@@ -291,7 +290,7 @@ class WebSocketTransport:
 
     async def start(self) -> None:
         """Start the WebSocket server."""
-        self.server = await websockets.serve(self.handle_connection, self.host, self.port)
+        self.server = await serve(self.handle_connection, self.host, self.port)
         logger.info("websocket_transport.started", host=self.host, port=self.port)
 
     async def stop(self) -> None:
@@ -306,13 +305,12 @@ class WebSocketTransport:
 
         logger.info("websocket_transport.stopped")
 
-    async def handle_connection(self, websocket: WebSocketServerProtocol, path: str) -> None:
+    async def handle_connection(self, websocket: ServerConnection) -> None:
         """
         Handle new WebSocket connection.
 
         Args:
             websocket: The WebSocket connection
-            path: The connection path
         """
         socket = Socket(websocket)
         self.sockets.add(socket)
@@ -320,8 +318,6 @@ class WebSocketTransport:
         try:
             async for message in websocket:
                 await socket.handle_websocket_message(message)
-        except websockets.exceptions.ConnectionClosed:
-            logger.debug("websocket_transport.connection_closed", socket_id=socket.id)
         except Exception as e:
             logger.error("websocket_transport.connection_error", socket_id=socket.id, error=str(e))
         finally:

@@ -319,19 +319,37 @@ class Channel:
         # multiple participants yet
         await self.push(event, payload)
 
-    def on(self, event: str, callback: Callable) -> None:
+    def on(self, event: str, callback: Callable | None = None):
         """
         Register an event handler.
 
+        Can be used as a decorator:
+            @channel.on("event_name")
+            def handler(payload, ref):
+                pass
+
+        Or as a regular method:
+            channel.on("event_name", handler)
+
         Args:
             event: The event name to listen for
-            callback: The callback function to invoke
+            callback: The callback function to invoke (optional for decorator usage)
         """
-        if event not in self.bindings:
-            self.bindings[event] = []
-        self.bindings[event].append(callback)
 
-        logger.debug("channel.event_bound", topic=self.topic, event_name=event)
+        def decorator(func: Callable) -> Callable:
+            if event not in self.bindings:
+                self.bindings[event] = []
+            self.bindings[event].append(func)
+            logger.debug("channel.event_bound", topic=self.topic, event_name=event)
+            return func
+
+        if callback is None:
+            # Used as decorator: @channel.on("event")
+            return decorator
+        else:
+            # Used as method: channel.on("event", callback)
+            decorator(callback)
+            return callback
 
     def off(self, event: str, callback: Callable | None = None) -> None:
         """

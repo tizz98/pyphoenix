@@ -90,7 +90,7 @@ class LoggingMiddleware(Middleware):
         """Log message processing."""
         logger.debug(
             "middleware.message_start",
-            event=event,
+            event_name=event,
             socket_id=socket.id if socket else "test",
             payload=payload,
         )
@@ -99,14 +99,14 @@ class LoggingMiddleware(Middleware):
             result = await next_handler(event, payload, socket)
             logger.debug(
                 "middleware.message_success",
-                event=event,
+                event_name=event,
                 socket_id=socket.id if socket else "test",
             )
             return result
         except Exception as e:
             logger.error(
                 "middleware.message_error",
-                event=event,
+                event_name=event,
                 socket_id=socket.id if socket else "test",
                 error=str(e),
             )
@@ -236,7 +236,7 @@ class RateLimitMiddleware(Middleware):
             logger.warning(
                 "middleware.rate_limit_exceeded",
                 socket_id=socket_id,
-                event=event,
+                event_name=event,
                 limit=self.max_messages_per_second,
             )
             raise Exception(f"Rate limit exceeded: {self.max_messages_per_second} messages/second")
