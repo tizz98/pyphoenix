@@ -21,6 +21,8 @@ PyPhoenix is a Python implementation of the Phoenix Framework's real-time commun
 
 ## 🚀 Quick Start
 
+> **⚠️ Development Status**: PyPhoenix is currently in Phase 2 development. The examples below show the target API but may not be fully functional yet. See [Project Status](#-project-status) for current implementation status and [Contributing](#-contributing-to-phase-2-development) for ways to help complete the integration work.
+
 ### Installation
 
 ```bash
@@ -143,7 +145,17 @@ poetry install --with dev,docs
 ### Running Tests
 
 ```bash
-poetry run pytest
+poetry run pytest                    # Run all tests
+poetry run pytest -v               # Verbose output
+poetry run pytest --cov            # With coverage
+```
+
+### Code Formatting
+
+```bash
+poetry run ruff format              # Format code
+poetry run ruff check               # Check linting
+poetry run ruff check --fix         # Auto-fix issues
 ```
 
 ### Building Documentation
@@ -153,11 +165,44 @@ cd docs
 poetry run sphinx-build -b html source build
 ```
 
-### Code Formatting
+### 🎯 **Contributing to Phase 2 Development**
 
+**Current Priority Areas (Great for Contributors!):**
+
+1. **Phoenix App Channel Routing** (`src/pyphoenix/phoenix.py`)
+   - The Phoenix class needs to route incoming WebSocket connections to registered channels
+   - Pattern matching for topics (`room:*` should match `room:123`)
+   - Connection between `WebSocketTransport` and `Phoenix.channel_handlers`
+
+2. **WebSocket ↔ Channel Integration** (`src/pyphoenix/socket.py`)
+   - Socket should create channels via Phoenix app's registered handlers
+   - Channel messages should route through Phoenix application context
+   - Implement channel lifecycle management (join/leave/error handling)
+
+3. **Client-Server Communication Testing**
+   - End-to-end tests with real WebSocket connections
+   - Example applications that demonstrate full client-server flows
+   - Broadcasting tests with multiple connected clients
+
+4. **PubSub Channel Integration** (`src/pyphoenix/pubsub.py` + `src/pyphoenix/channel.py`)
+   - Channels should automatically publish/subscribe via PubSub
+   - Cross-channel message routing and broadcasting
+   - Presence updates should propagate through PubSub
+
+**How to Help:**
+- Pick any of the above areas and create focused PRs
+- Add integration tests for client-server communication
+- Create working examples in `examples/` directory
+- Improve error handling and logging for debugging
+
+**Testing Your Changes:**
 ```bash
-poetry run ruff format
-poetry run ruff check
+# Test current basic functionality
+poetry run pytest tests/
+
+# Test WebSocket basics manually
+poetry run python examples/even_more_basic_server.py  # Terminal 1
+poetry run python examples/even_more_basic_client.py  # Terminal 2
 ```
 
 ## 🏛️ Architecture
@@ -231,24 +276,61 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📊 Project Status
 
-PyPhoenix is currently in **Phase 1+** development with core functionality complete:
+PyPhoenix is currently in **Phase 2** development with core foundation complete:
 
-- ✅ Core channel operations (join, leave, push, broadcast)
-- ✅ WebSocket transport with Phoenix wire format
-- ✅ PubSub messaging with pattern matching  
-- ✅ Presence tracking with callbacks
-- ✅ Middleware framework (logging, auth, rate limiting)
-- ✅ Configuration system with environment variables
-- ✅ Metrics collection and monitoring
-- ✅ Client implementation with reconnection
-- ✅ Comprehensive test suite
-- ✅ Full documentation
+### ✅ **Completed Foundation (Phase 1)**
+- Core WebSocket implementation with asyncio support  
+- Channel and Socket abstractions with Phoenix wire format
+- PubSub messaging system with pattern matching
+- Presence tracking with distributed state management
+- Client implementation with decorator support
+- Middleware framework architecture
+- Configuration and metrics systems
+- Comprehensive type definitions and error handling
 
-**Coming Next:**
-- Distributed multi-node support
-- Additional transport protocols (SSE, Long Polling)
+### 🚧 **Current Development Phase (Phase 2): Integration & Testing**
+
+**Next Priority Tasks (2-4 weeks):**
+
+1. **Phoenix App Integration** ⭐ **CRITICAL**
+   - Connect Phoenix app class to actual channel routing
+   - Implement channel pattern matching (`room:*` → RoomChannel)
+   - Bridge WebSocket connections to Phoenix application
+
+2. **End-to-End Functionality** ⭐ **CRITICAL** 
+   - Create working client-server examples that actually communicate
+   - Fix channel join/leave flows between client and server
+   - Ensure message broadcasting works across connections
+
+3. **Core Feature Completion**
+   - Complete PubSub integration with channel broadcasting
+   - Implement presence synchronization across connections
+   - Add comprehensive integration testing
+
+4. **Developer Experience**
+   - Working server/client examples in `examples/`
+   - Basic tutorial documentation
+   - Debugging and logging improvements
+
+### 🔮 **Future Phases (Phase 3+)**
+
+**Phase 3: Production Readiness (4-8 weeks)**
+- Performance optimization and load testing
+- Error recovery and fault tolerance
+- Production deployment guides
 - Framework integrations (Django, FastAPI, Flask)
-- Performance optimizations and benchmarks
+
+**Phase 4: Advanced Features (8-16 weeks)**  
+- Distributed multi-node support with node discovery
+- Additional transport protocols (SSE, Long Polling)
+- Advanced presence features (user tracking, rooms)
+- Real-time analytics and monitoring dashboard
+
+**Phase 5: Ecosystem (16+ weeks)**
+- Plugin system architecture
+- Community middleware and extensions
+- Integration with message brokers (Redis, RabbitMQ)
+- Performance benchmarks vs Phoenix Framework
 
 ---
 
