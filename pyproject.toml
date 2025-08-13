@@ -1,0 +1,77 @@
+[project]
+name = "pyphoenix"
+version = "0.1.0"
+description = "Python implementation of Phoenix Framework's real-time communication patterns"
+authors = [
+    {name = "Elijah Wilson",email = "dev.tizz98@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "MIT"}
+keywords = ["phoenix", "websocket", "realtime", "pubsub", "presence", "channels"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Networking",
+]
+dependencies = [
+]
+
+[project.urls]
+"Homepage" = "https://github.com/tizz98/pyphoenix"
+"Documentation" = "https://tizz98.github.io/pyphoenix/"
+"Repository" = "https://github.com/tizz98/pyphoenix.git"
+"Bug Tracker" = "https://github.com/tizz98/pyphoenix/issues"
+
+[tool.poetry]
+packages = [{include = "pyphoenix", from = "src"}]
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
+pytest-asyncio = "^1.1.0"
+websockets = "^15.0.1"
+aiohttp = "^3.12.15"
+structlog = "^25.4.0"
+ruff = "^0.12.8"
+
+[tool.poetry.group.docs.dependencies]
+sphinx = "^7.0.0"
+sphinx-rtd-theme = "^2.0.0"
+sphinx-autodoc-typehints = "^1.25.0"
+myst-parser = "^2.0.0"
+sphinxcontrib-asyncio = "^0.3.0"
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501", # line too long, handled by formatter
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
